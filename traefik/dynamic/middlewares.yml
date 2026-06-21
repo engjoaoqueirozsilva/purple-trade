@@ -1,0 +1,33 @@
+# traefik/dynamic/middlewares.yml
+# Configuração dinâmica do Traefik
+
+http:
+  middlewares:
+    # Basic Auth — protege todas as rotas
+    # Gere o hash com: htpasswd -nb usuario senha
+    auth:
+      basicAuth:
+        users:
+          - "admin:$apr1$CHANGEME$CHANGEME_HASH_HERE"
+        removeHeader: true
+
+    # Segurança de headers
+    secure-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        customResponseHeaders:
+          X-Robots-Tag: "none,noarchive,nosnippet,notranslate,noimageindex"
+
+    # CORS para o backend
+    cors-api:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - OPTIONS
+        accessControlAllowOriginList:
+          - "https://purpletrade.yourdomain.com"
+        accessControlMaxAge: 100
+        addVaryHeader: true

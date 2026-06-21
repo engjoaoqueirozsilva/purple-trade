@@ -1,0 +1,28 @@
+# Env
+.env
+*.env.local
+
+# Traefik
+traefik/letsencrypt/acme.json
+
+# Freqtrade
+freqtrade/user_data/logs/*.log
+freqtrade/user_data/tradesv3.sqlite
+freqtrade/user_data/data/
+freqtrade/user_data/config-private.json
+
+# Node
+node_modules/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Docker
+*.override.yml
+
+# OS
+.DS_Store
+Thumbs.db

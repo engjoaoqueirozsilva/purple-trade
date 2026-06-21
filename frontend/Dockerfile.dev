@@ -1,0 +1,14 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Instala dependências separado para aproveitar cache de layer
+COPY package.json package-lock.json* ./
+RUN npm install
+
+# Copia o restante (será sobrescrito pelos volume mounts no compose)
+COPY . .
+
+EXPOSE 5173
+
+CMD ["npm", "run", "dev"]

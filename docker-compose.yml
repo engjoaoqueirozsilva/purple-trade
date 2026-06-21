@@ -1,0 +1,151 @@
+version: "3.9"
+
+networks:
+  purple_net:
+    driver: bridge
+  traefik_public:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  freqtrade_data:
+
+services:
+  # ─────────────────────────────────────────
+  # TRAEFIK — Reverse Proxy + Auth
+  # ─────────────────────────────────────────
+  traefik:
+    image: traefik:v3.0
+    container_name: purple_traefik
+    restart: unless-stopped
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./traefik/dynamic:/etc/traefik/dynamic:ro"
+      - "./traefik/letsencrypt:/letsencrypt"
+    networks:
+      - traefik_public
+      - purple_net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=auth@file"
+
+  # ─────────────────────────────────────────
+  # FRONTEND — React + Vite
+  # ─────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: purple_frontend
+    restart: unless-stopped
+    networks:
+      - purple_net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend.middlewares=auth@file"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+
+  # ─────────────────────────────────────────
+  # BACKEND — FastAPI
+  # ─────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: purple_backend
+    restart: unless-stopped
+    environment:
+      - FREQTRADE_URL=http://freqtrade:8080
+      - FREQTRADE_USER=${FREQTRADE_USER:-freqtrader}
+      - FREQTRADE_PASSWORD=${FREQTRADE_PASSWORD:-password}
+      - ENV=production
+    networks:
+      - purple_net
+    volumes:
+      - freqtrade_data:/freqtrade_data:ro
+    depends_on:
+      - freqtrade
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`api.${DOMAIN}`)"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.backend.middlewares=auth@file"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+
+  # ─────────────────────────────────────────
+  # FREQTRADE — Bot de trading
+  # ─────────────────────────────────────────
+  freqtrade:
+      build:
+        context: ./freqtrade
+        dockerfile: Dockerfile
+      container_name: purple_freqtrade_dev
+      restart: unless-stopped
+      volumes:
+        - ./freqtrade/user_data:/freqtrade/user_data
+      command: >
+        trade
+        --logfile /freqtrade/user_data/logs/freqtrade.log
+        --db-url sqlite:////freqtrade/user_data/tradesv3_live_testnet.sqlite
+        --config /freqtrade/user_data/config.json
+        --config /freqtrade/user_data/config-private.json
+        --strategy PurpleRSIEMA
+      ports:
+        - "8080:8080"
+      networks:
+        - purple_net
+  # ─────────────────────────────────────────
+  # POSTGRESQL — Banco de dados (previsto)
+  # ─────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: purple_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-purpletrade}
+      - POSTGRES_USER=${POSTGRES_USER:-purple}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - purple_net
+    profiles:
+      - full
+
+  # ─────────────────────────────────────────
+  # REDIS — Cache/eventos (previsto)
+  # ─────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: purple_redis
+    restart: unless-stopped
+    networks:
+      - purple_net
+    profiles:
+      - full

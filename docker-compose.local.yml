@@ -1,0 +1,69 @@
+version: "3.9"
+
+# Uso: docker compose -f docker-compose.local.yml up
+# Acesso: http://localhost:3000 (frontend) | http://localhost:8000 (backend)
+
+networks:
+  purple_net:
+    driver: bridge
+
+volumes:
+  freqtrade_data:
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: purple_frontend_dev
+    restart: unless-stopped
+    ports:
+      - "3000:5173"
+    volumes:
+      - ./frontend/src:/app/src:delegated
+      - ./frontend/vite.config.js:/app/vite.config.js:ro
+    networks:
+      - purple_net
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: purple_backend_dev
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app:delegated
+    environment:
+      - FREQTRADE_URL=http://freqtrade:8080
+      - FREQTRADE_USER=freqtrader
+      - FREQTRADE_PASSWORD=purpletrade123
+      - ENV=development
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - purple_net
+    depends_on:
+      - freqtrade
+
+  freqtrade:
+      build:
+        context: ./freqtrade
+        dockerfile: Dockerfile
+      container_name: purple_freqtrade_dev
+      restart: unless-stopped
+      volumes:
+        - ./freqtrade/user_data:/freqtrade/user_data
+      command: >
+        trade
+        --logfile /freqtrade/user_data/logs/freqtrade.log
+        --db-url sqlite:////freqtrade/user_data/tradesv3_live_testnet.sqlite
+        --config /freqtrade/user_data/config.json
+        --config /freqtrade/user_data/config-private.json
+        --strategy PurpleRSIEMA
+      ports:
+        - "8080:8080"
+      networks:
+        - purple_net
