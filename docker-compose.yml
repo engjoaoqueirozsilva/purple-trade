@@ -30,7 +30,7 @@ services:
     networks:
       - purple_net
     environment:
-      - FREQTRADE_URL=http://r8ivtmv3206l0yu32lwf4o3t.147.93.68.31.sslip.io:8080
+      - FREQTRADE_URL=http://freqtrade-huha28vvjegks7z7vt6idkxg-231205027041:8080
       - FREQTRADE_USER=${FREQTRADE_USER}
       - FREQTRADE_PASSWORD=${FREQTRADE_PASSWORD}
       - DATABASE_URL=${DATABASE_URL}
