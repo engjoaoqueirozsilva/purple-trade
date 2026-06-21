@@ -1,5 +1,9 @@
 version: "3.9"
 
+networks:
+  purple_net:
+    external: true
+
 services:
   freqtrade:
     build:
@@ -7,8 +11,8 @@ services:
       dockerfile: Dockerfile
     container_name: purple_freqtrade
     restart: unless-stopped
-    ports:
-      - "80:8080"
+    networks:
+      - purple_net
     command: >
       trade
       --logfile /freqtrade/user_data/logs/freqtrade.log

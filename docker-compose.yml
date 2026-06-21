@@ -1,5 +1,9 @@
 version: "3.9"
 
+networks:
+  purple_net:
+    external: true
+
 services:
 
   # ─────────────────────────────────────────
@@ -11,6 +15,8 @@ services:
       dockerfile: Dockerfile
     container_name: purple_frontend
     restart: unless-stopped
+    networks:
+      - purple_net
 
   # ─────────────────────────────────────────
   # BACKEND — FastAPI
@@ -21,11 +27,10 @@ services:
       dockerfile: Dockerfile
     container_name: purple_backend
     restart: unless-stopped
+    networks:
+      - purple_net
     environment:
-      # Após subir o Freqtrade no Coolify, substitua pelo hostname gerado
-      # Ex: https://abc123.seuservidor.coolify.io
-      # Quando aplicar subdomínio próprio: https://bot.seudominio.com
-      - FREQTRADE_URL=${FREQTRADE_URL}
+      - FREQTRADE_URL=http://purple_freqtrade:8080
       - FREQTRADE_USER=${FREQTRADE_USER}
       - FREQTRADE_PASSWORD=${FREQTRADE_PASSWORD}
       - DATABASE_URL=${DATABASE_URL}
