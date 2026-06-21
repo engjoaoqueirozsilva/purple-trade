@@ -4,7 +4,7 @@ import { MetricCard } from '../components/MetricCard'
 import { TradesTable } from '../components/TradesTable'
 import { LogTerminal } from '../components/LogTerminal'
 import { Header } from '../components/Header'
-import { DiagnosticsPanel } from '../components/DiagnosticsPanel'
+import { DiagnosticsPanel } from '../components/Diagnosticspanel'
 
 // ─────────────────────────────────────────
 // Ícones inline (sem dependência externa)
