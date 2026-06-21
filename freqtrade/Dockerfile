@@ -1,10 +1,9 @@
 FROM freqtradeorg/freqtrade:stable
 
-# Atualiza o CCXT para a última versão disponível, pois versões
-# anteriores têm um bug conhecido no roteamento de URLs autenticadas
-# para a Binance Spot Testnet (sandbox mode), causando
-# "AuthenticationError: Invalid Api-Key ID" mesmo com credenciais válidas.
-# Ref: https://github.com/ccxt/ccxt/issues/27266
-USER root
+# Instala dependências extras
 RUN pip install --no-cache-dir --upgrade ccxt
-USER ftuser
+
+# Copia todo o user_data (incluindo config.json e estratégias)
+# para dentro da imagem — garante que o config esteja disponível
+# mesmo sem volume externo
+COPY user_data /freqtrade/user_data
