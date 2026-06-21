@@ -1,27 +1,32 @@
 """
-PurpleRSIEMAv2 — Estratégia inicial refinada do Purple Trade
+PurpleMomentumScalp — Estratégia agressiva para testes A/B
 
 Objetivo:
-- Estratégia simples
-- Fácil manutenção
-- Melhor filtragem de tendência
-- Redução de entradas ruins
-- Estrutura preparada para hyperopt
+- Estratégia mais agressiva
+- Maior frequência de trades
+- Capturar movimentos curtos
+- Mais exposição ao mercado
+- Ideal para comparação com PurpleRSIEMAv2
 
-Estratégia:
-BUY:
-- RSI abaixo do threshold
-- Cruzamento EMA fast acima EMA slow
-- Preço acima da EMA200
-- Volume válido
+Características:
+- Timeframe rápido
+- Entradas mais permissivas
+- ROI mais agressivo
+- Stop menor
+- Mais trades
+- Maior risco
 
-SELL:
-- RSI acima do threshold
-OU
-- Cruzamento EMA fast abaixo EMA slow
+ATENÇÃO:
+Essa estratégia tende a:
+- operar muito mais
+- sofrer mais em lateralização
+- aumentar drawdown
+- exigir monitoramento maior
 
-Modo:
-- Paper Trading / Testnet inicialmente
+USAR APENAS:
+- paper trading
+- testnet
+- valores pequenos inicialmente
 """
 
 from freqtrade.strategy import (
@@ -35,85 +40,87 @@ import talib.abstract as ta
 import freqtrade.vendor.qtpylib.indicators as qtpylib
 
 
-class PurpleRSIEMAv2(IStrategy):
+class PurpleMomentumScalp(IStrategy):
 
     INTERFACE_VERSION = 3
 
     # =========================================================
     # TIMEFRAME
     # =========================================================
-    timeframe = "5m"
+    timeframe = "3m"
 
     can_short = False
 
-    startup_candle_count = 250
+    startup_candle_count = 200
+
+    process_only_new_candles = True
 
     # =========================================================
     # RISCO
     # =========================================================
-    stoploss = -0.05
+    stoploss = -0.03
 
     trailing_stop = True
-    trailing_stop_positive = 0.01
-    trailing_stop_positive_offset = 0.02
+    trailing_stop_positive = 0.008
+    trailing_stop_positive_offset = 0.015
     trailing_only_offset_is_reached = True
 
     # =========================================================
-    # ROI
+    # ROI (mais agressivo)
     # =========================================================
     minimal_roi = {
-        "0": 0.02,
-        "30": 0.015,
-        "60": 0.01,
-        "120": 0
+        "0": 0.03,
+        "15": 0.02,
+        "30": 0.01,
+        "60": 0
     }
 
     # =========================================================
-    # HYPEROPT PARAMETERS
+    # HYPEROPT
     # =========================================================
     rsi_period = IntParameter(
-        low=10,
-        high=20,
-        default=14,
+        low=7,
+        high=14,
+        default=9,
         space="buy"
     )
 
     rsi_buy_threshold = DecimalParameter(
-        25.0,
-        40.0,
-        default=35.0,
+        30.0,
+        50.0,
+        default=42.0,
         decimals=1,
         space="buy"
     )
 
     rsi_sell_threshold = DecimalParameter(
-        60.0,
-        75.0,
-        default=65.0,
+        55.0,
+        80.0,
+        default=68.0,
         decimals=1,
         space="sell"
     )
 
     ema_fast = IntParameter(
-        low=5,
-        high=15,
-        default=9,
+        low=3,
+        high=10,
+        default=5,
         space="buy"
     )
 
     ema_slow = IntParameter(
-        low=15,
-        high=30,
-        default=21,
+        low=10,
+        high=20,
+        default=13,
         space="buy"
     )
 
     # =========================================================
-    # ORDER TYPES
+    # ORDERS
     # =========================================================
     order_types = {
-        "entry": "limit",
-        "exit": "limit",
+        "entry": "market",
+        "exit": "market",
         "stoploss": "market",
         "stoploss_on_exchange": False,
     }
@@ -127,13 +134,11 @@ class PurpleRSIEMAv2(IStrategy):
         metadata: dict
     ) -> DataFrame:
 
-        # RSI
         dataframe["rsi"] = ta.RSI(
             dataframe,
             timeperiod=self.rsi_period.value
         )
 
-        # EMAs
         dataframe["ema_fast"] = ta.EMA(
             dataframe,
             timeperiod=self.ema_fast.value
@@ -144,16 +149,14 @@ class PurpleRSIEMAv2(IStrategy):
             timeperiod=self.ema_slow.value
         )
 
-        # Tendência macro
-        dataframe["ema_200"] = ta.EMA(
-            dataframe,
-            timeperiod=200
-        )
+        dataframe["macd"] = ta.MACD(dataframe)["macd"]
+        dataframe["macdsignal"] = ta.MACD(dataframe)["macdsignal"]
 
-        # Volume médio
+        dataframe["adx"] = ta.ADX(dataframe, timeperiod=14)
+
         dataframe["volume_mean"] = (
             dataframe["volume"]
-            .rolling(20)
+            .rolling(10)
             .mean()
         )
 
@@ -170,7 +173,7 @@ class PurpleRSIEMAv2(IStrategy):
 
         dataframe.loc[
             (
-                # RSI baixo
+                # RSI momentum
                 (
                     dataframe["rsi"]
                     < self.rsi_buy_threshold.value
@@ -178,25 +181,30 @@ class PurpleRSIEMAv2(IStrategy):
 
                 &
 
-                # Cruzamento EMA bullish
+                # EMA bullish
                 (
-                    qtpylib.crossed_above(
-                        dataframe["ema_fast"],
-                        dataframe["ema_slow"]
-                    )
+                    dataframe["ema_fast"]
+                    > dataframe["ema_slow"]
                 )
 
                 &
 
-                # Tendência macro bullish
+                # MACD bullish
                 (
-                    dataframe["close"]
-                    > dataframe["ema_200"]
+                    dataframe["macd"]
+                    > dataframe["macdsignal"]
                 )
 
                 &
 
-                # Volume válido
+                # Mercado com força
+                (
+                    dataframe["adx"] > 20
+                )
+
+                &
+
+                # Volume acima da média
                 (
                     dataframe["volume"]
                     > dataframe["volume_mean"]
@@ -204,7 +212,6 @@ class PurpleRSIEMAv2(IStrategy):
 
                 &
 
-                # Segurança extra
                 (
                     dataframe["volume"] > 0
                 )
@@ -225,7 +232,7 @@ class PurpleRSIEMAv2(IStrategy):
 
         dataframe.loc[
             (
-                # RSI alto
+                # RSI sobrecomprado
                 (
                     dataframe["rsi"]
                     > self.rsi_sell_threshold.value
@@ -233,12 +240,18 @@ class PurpleRSIEMAv2(IStrategy):
 
                 |
 
-                # Cruzamento bearish
+                # Perda de momentum
                 (
-                    qtpylib.crossed_below(
-                        dataframe["ema_fast"],
-                        dataframe["ema_slow"]
-                    )
+                    dataframe["macd"]
+                    < dataframe["macdsignal"]
+                )
+
+                |
+
+                # EMA bearish
+                (
+                    dataframe["ema_fast"]
+                    < dataframe["ema_slow"]
                 )
             ),
             "exit_long",
@@ -253,18 +266,27 @@ class PurpleRSIEMAv2(IStrategy):
     def protections(self):
         return [
 
-            # Cooldown entre trades
+            # Cooldown curto
             {
                 "method": "CooldownPeriod",
-                "stop_duration_candles": 3
+                "stop_duration_candles": 1
             },
 
-            # Proteção contra sequência ruim
+            # Stoploss guard agressivo
             {
                 "method": "StoplossGuard",
-                "lookback_period_candles": 24,
-                "trade_limit": 3,
-                "stop_duration_candles": 12,
+                "lookback_period_candles": 12,
+                "trade_limit": 5,
+                "stop_duration_candles": 6,
                 "only_per_pair": False
+            },
+
+            # Evita avalanche de trades ruins
+            {
+                "method": "MaxDrawdown",
+                "lookback_period_candles": 48,
+                "trade_limit": 20,
+                "stop_duration_candles": 12,
+                "max_allowed_drawdown": 0.20
             }
         ]
